@@ -1,0 +1,103 @@
+ COGS v.0.2, 2012-07-30
+------------------------
+
+This README file provides instructions on how to quickly set up and start using the simulator and its associated utilities.
+
+This document is currently being added to and INCOMPLETE, therefore queries should be forwarded to mtelahi@cs.uwaterloo.ca with the subject "COGS-0.2".
+
+Pre-Processing Stage:
+1. Download the consensus and descriptor data from the Tor Metrics website:
+$get_metrics_consensus.pl
+$get_metrics_descriptors.pl
+
+You will need to edit the $start[month/year] and $end[month/year] variables in the scripts above to suit your needs.
+
+2. Process the raw descriptors just downloaded to prepare them for simulation use.
+$find_descriptors.pl <path to downloaded descriptor docs> <start month> <year> <output dir>
+NOTE: change the paths inside this script with the path to your own downloaded consensus and descriptor documents.
+
+Note: If there are multiple years then run this script for those years too.
+
+3.Change directory into the src/tor directory. Then do the following:
+$./autogen.sh
+$./configure (ignore errors about ascii-docs)
+$./make
+
+Simulation stage:
+We now have the data and all associated files set up. We can now run our mass Tor client simulator.
+
+The simulator is invoked by calling the tor binary in the src/tor/src/or directory.
+
+There are many options and parameters. We'll provide the template, show an example and then describe the parameters and options possible.
+
+Simulation invocation template:
+
+src/tor/src/or/tor --Simulation <turn simulation on/off> --ConsensusDir <path to consensus docs> --DescriptorDir <path to descriptor docs> --SocksPort <an unused port> --StartConsensus <start epoch> --StopConsensus <end epoch> --DataDirectory <directory for tor processes state files> --NumPaths <number of circuits/hour to simulate> --NumClients <number of Tor clients to simulate> --NumMalicious <number of malicious Tor relays> --Log <log level> --MaliciousExit <give exit flag to malicious relays> --MaliciousGuard <give guard flag to malicious relays> --NumEntryGuards <number of entry guards/client> --MaliciousIntroDate <epoch insertion time of malicious nodes into network> --MaliciousBandwidth <How much malicious bandwidth to assign to each malicious relay> --NoChurn <guard rotation enabled/disabled> > <output file>
+
+An example where 80,000 clients are simulated from 01/04/2012-30/11/2011, with guard rotation on, one malicious relay with 100 MB/s BW, that is injected one hour after the clients, and has only the guard flag assigned, with 6 circuits/hour and with the default 3 entry guards follows:
+
+$src/tor/src/or/tor --Simulation 1 --ConsensusDir ~/consensus-docs/ --DescriptorDir ~/descriptor-docs/ --SocksPort 9000 --StartConsensus 1301616000 --StopConsensus 1322694000 --DataDirectory ~/tmp/ --NumPaths 6 --NumClients 80000 --NumMalicious 1 --Log err --MaliciousExit 0 --MaliciousGuard 1 --NumEntryGuards 3 --MaliciousIntroDate 1301619600 --MaliciousBandwidth 100 --NoChurn 0 > output.txt
+
+We now present possible value ranges for each of the parameters and a short description:
+
+Simulation: 1 = on or 0 = off. The master simulation switch that controls if the binary will also perform simulation functions and requires the parameters below.
+ConsensusDir: [any path]. The path to the processed consensus docs.
+DescriptorDir: [any path]. The path to the processed descriptor docs.
+SocksPort: [any high port that is free]. When we invoke many instances of the simulator each needs it's own dedicated port. 
+StartConsensus: [time in epoch format]. Convert the start date and time for the simulation to epoch format; must be no earlier than first consensus/descriptor downloaded and preprosessed.
+Stop Consensus: [time in epoch format]. Convert the end date and time for the simulation to epoch format; must be no later than last consensus/descriptor downloaded and preprosessed.
+DataDirectory: [any path]. When we invoke many instances of the simulator each process needs it's own directory for working files.
+NumPaths: [0-however many your processor/memory can handle] Note: higher values take longer to simulate. The simulator can simulate circuit construction to show which routers take part in a circuit given the client's guards and exits available in the simulated network.
+NumClients: [1-however many your processor/memory can handle] Note: higher values take longer to simulate. The simulator allows small to large scale simulation of clients on the network. We found that 80,000 was a good number since the trends we were interested in converge at this number of users. 
+NumMalicious: [0--however many your processor/memory can handle] Note: higher values take longer to simulate]. It is possible to experiment both adversaries with multiple nodes as well as networks with multiple adversaries. 
+Log: err, warn, notice. The level of logging and hence size of the logs can be controlled through these settings. We have instrumented our output through the err level.
+MaliciousExit: 0 = no, 1 = yes. Experiments with exit relays can be controlled here by assigning the malicious relays the exit flag. Note that this assigns ALL malicious relays the exit flag. 
+MaliciousGuard: 0 = no, 1 = yes. Experiments with guard relays can be controlled here by assigning the malicious relays the guard flag. Note that this assigns ALL malicious relays the guard flag.
+NoChurn: 0 = guard rotation on, 1 = guard rotation off. Guard rotation plays a major role in client security and the researcher can use this switch to completely turn guard rotation on or off here to study its effects.
+NumEntryGuards: [0-thousands]. This controls the built-in Tor entry guard allocation mechanism. The default is 3 guards.
+MaliciousIntroDate: [time in epoch format]. Convert the date and time for insertion of malicious relays into the network. While you may assign dates that fall outside the range of the experiment only ranges within the experiment duration will have any effect.
+MaliciousBandwdith: [0-10000000000]. We assign the amount of bandwidth for each malicious relays injected. All malicious relays will get this same bandwidth allocation. NOTE: this number is not related to any real world measure and is relative to the weighted bandwidth in the consensus documents.
+
+Multi-processor environments:
+To make the invocation of the simulator easier, especially in a multi-processor environment, we make two scripts available with some common parameters choices.
+1. batch_simulation_rotation.pl - This script assumes one malicious adversary, the Log level err, and with guard rotation on. The rest of the parameters can be issued at the command line. It will take the number of clients and evenly distribute them over the number of jobs (i.e. parallel processes). In this way we can get speed ups due to parallelism in the simulator. 
+2. batch_simulation_norotation.pl - This script assumes one malicious adversary, the Log level err, and with guard rotation off. The rest of the parameters can be issued at the command line. It will take the number of clients and evenly distribute them over the number of jobs (i.e. parallel processes). In this way we can get speed ups due to parallelism in the simulator. 
+
+NOTE: be careful about disk space since, depending on the log level, the simulator can produce a lot of output.
+
+Post-Processing Phase:
+The output file(s) contain all the simulator output. We process this data using the following scripts according to our observables. You may process it whatever way is suitable to your desired observables.
+
+1. To produce a PDF of Compromise rates (assume 3 guards and 80000 clients): 
+$cat outputfile.txt | parse_simulation_output.pl 3 > compromise_raw.txt (Repeat for multiple output files here if parallel processing was used and concatenate the results to the same file; e.g., compromise_raw.txt) 
+$grep "^Client " compromise_raw.txt | cut -f3 -d" " | sort -n | uniq -c | awk '{print $1/80000, $2}' > compromise.pdf
+
+Description: The parse_simulation_output.pl script parses the output file and extracts the times where a malicious relay, labelled "evilguy" ends up in a client's guard list. It will only count times where the evilguy was in the top N "up" guards. It takes a parameter to assign N, which should be the same as NumGuards during the simulation run. In the example above this number is 3 which is the default for Tor.
+
+Output: This will provide the data required to plot the PDF of compromise rates for that simulation run.
+
+2. To produce a PDF of client guard counts:
+$cat outputfile.txt | guard-client-counter.pl > guard_count_raw.txt (Repeat for multiple output files here if parallel processing was used and concatenate the results to the same file; e.g., guard_count_raw.txt) 
+$awk '{print $NF}' guard_count_raw.txt | sort -n | uniq -c | awk '{print $1/80000, $2}' > guard-count.pdf
+
+Description: The guard-client-counter.pl script accumulates the size of each client's guard list over the duration of the run. It keeps track of how many guards have been contacted by each client. It therefore provides the maximum overall count of unique guards seen by each client.
+
+Output: This will provide the data required to plot the PDF of client guard counts for that simulation run.
+
+3. to produce the CDF of client guard performance:
+$cat outputfile.txt | find_small_guard_sets.pl 3 > perform_raw.txt (Repeat for multiple output files here if parallel processing was used and concatenate the results to the same file; e.g., perform_raw.txt) 
+**At this stage you may want to take just a sample from the perform_raw.txt file since it is quite large and we do not need all of the readings to get a relatively accurate performance measurement.
+
+$wc -l perform_raw.txt (to find out how many readings we have because this will be needed in the next step.)
+$grep "^Client " perform0 | awk '{print $NF}' | sort -n | cat -n | awk '{print $1/XXX, $2} > perform.cdf (where XXX is the number from the previous step.)
+
+Description: the script find_small_guard_sets.pl records the average expected performance for each client's guard list. It only considers the top N guards in the client's guard list, which is passed as a parameter (3 in the example above). 
+
+Output: This will provide the data required to plot the CDF of average client guard performance for that simulation run.
+
+Changelog 
+20120730: version 0.2.
+Included README file for simulation.
+
+20120717: version 0.1
+Initial release

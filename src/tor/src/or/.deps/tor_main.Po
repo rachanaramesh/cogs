@@ -1,0 +1,5 @@
+tor_main.o: tor_main.c /usr/include/stdc-predef.h micro-revision.i
+
+/usr/include/stdc-predef.h:
+
+micro-revision.i:

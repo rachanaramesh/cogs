@@ -1,0 +1,3 @@
+test_data.o: test_data.c /usr/include/stdc-predef.h
+
+/usr/include/stdc-predef.h:
